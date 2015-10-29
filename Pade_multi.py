@@ -1,34 +1,11 @@
+# Author: Paul Glenn
+# given input data, returns Pade approximant
+# p(x1,x2, ..., xN ) / q(x1, x2, ..., xN), where
+# p is of degree M and q is of degree N (polynomials) .
+#see Pade(...) for input data format. (column vectors) .
+
 import numpy as np
 import scipy.optimize
-
-def cdjac(f,x) :
-    # Jacobian from centered differencing
-    # for a scalar valued function (gradient)
-
-    eps = 1e-10
-    Df = np.zeros_like(x)
-    for i in range(x.size) :
-        dX = np.zeros_like(x)
-        dX[i]= eps
-        Df[i] = (f(x+dX)  - f(x-dX)) / (2* eps )
-
-    return Df
-
-def cdjac(F, X):
-    # Jacobian from centered differencing
-    # for a scalar valued function
-    eps = 1e-10
-    DF = np.zeros((F.size, X.size))
-    for i in range(F.size):
-        for j in range(x.size) :
-            dX = np.zeros_like(X)
-            dX[j] = eps
-            DF[i,j] = (F[i](X+dX) - F[i](X-dX)) / (2* eps)
-
-    return DF
-
-
-
 
 
 def Pade(A,M,N):
@@ -43,7 +20,7 @@ def Pade(A,M,N):
     X = A[:,:-1]
     Y = A[:,-1]
 
-    # pade function in variables
+    # multivariate pade function of
     a = np.ones((ncols -1 ) * M + 1)
     b = np.ones((ncols - 1) * N )
     ab = np.hstack(( a, b) )
@@ -71,6 +48,7 @@ def Pade(A,M,N):
             den += 1e-15
         return num / den
 
+    # residual fn.
     def PHI(coeffs, X,Y , M, N) :
         # coeffs: Pade coefficients
         # X : matrix of all variables
@@ -86,8 +64,8 @@ def Pade(A,M,N):
 
     def F(x) :
         return PHI(x, X, Y, M, N)
-    #F = lambda coeffs: PHI(coeffs,X,Y,M, N)
 
+    # gradient computation
     def cdjac(x) :
 
         eps = 1e-10
@@ -100,16 +78,19 @@ def Pade(A,M,N):
         #Df = np.outer(df,df)
         return df
 
+
     # now find optimal values in ab through CG minimization
     ab_min = scipy.optimize.minimize(PHI, ab,args=((X,Y, M , N)),method =
             'Nelder-Mead', options={'maxfev':3e3,'disp':True,'xtol':1e-6,'ftol':1e-6/nrows})
-    #ab_min = scipy.optimize.minimize(F, ab ,method =
-    #        'Nelder-Mead', options={'maxfev':3e3,'disp':True,'xtol':1e-6,'ftol':1e-6/nrows})
     #ab_min = scipy.optimize.minimize(F,ab, method='Newton-CG',jac=cdjac )
-    # CG is 'extremely' slow for this - an option would be to modify PHI to
-    # a vector function and see if that makes it better. (even though
-    # that means huge Jacobian? ) since it may then be more precise.
-    #if anyone wants to test this let me know the results!
+
 
     return ab_min['x']
+
+# Remark: I use Nelder-Mead here because
+# CG is 'extremely' slow for this - an option would be to modify PHI to
+# a vector function and see if that makes it better. (even though
+# that means huge Jacobian? ) since it may then be more precise.
+#if anyone wants to test this let me know the results!
+# other option, of course, is C++...
 
