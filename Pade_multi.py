@@ -3,53 +3,112 @@
 # p(x1,x2, ..., xN ) / q(x1, x2, ..., xN), where
 # p is of degree M and q is of degree N (polynomials) .
 #see Pade(...) for input data format. (column vectors) .
-
 import numpy as np
 import scipy.optimize
+from scipy.misc import comb
+from itertools import permutations
 
 
-def Pade(A,M,N):
+def accelAsc(n):
+    # generate integer partitions of n
+    a = [0 for i in range(n + 1)]
+    k = 1
+    y = n - 1
+    while k != 0:
+        x = a[k - 1] + 1
+        k -= 1
+        while 2*x <= y:
+            a[k] = x
+            y -= x
+            k += 1
+        l = k + 1
+        while x <= y:
+            a[k] = x
+            a[l] = y
+            yield a[:k + 2]
+            x += 1
+            y -= 1
+        a[k] = x + y
+        y = x + y - 1
+        yield a[:k + 1]
+
+def genPowers(nvars, nmax) :
+    # generate list of exponents
+    partitions = accelAsc(nmax)
+    plist = list(partitions)
+    klist = []
+    npart = len(plist)
+
+    plist_init = list(plist)
+    nterms = comb(nmax + nvars -1 , nmax )
+
+    defects = [ nvars - len(l) for l in plist]
+    for i in range(npart) :
+        plist[i] = plist[i] + defects[i] * [0]
+        perms = list( permutations(plist[i]) )
+        unique_perms = list( set(perms) )
+        klist += unique_perms
+
+
+    return klist
+
+def product(myList) :
+    p = 1.0
+    for item in myList :
+        p *= item
+    return p
+
+def Pade_fit(A,M,N):
     # A : input array, [x0 x1 ... xN y({x}) ]
     # (this is the "function" to be fit)
-    # M : order of the numerator
-    # N : order of the denominator
+    # M : desired order of the numerator
+    # N : desired order of the denominator
 
     # separate variable array from fn
     ncols = A.shape[1]
     nrows = A.shape[0]
     X = A[:,:-1]
+    lenX = ncols - 1
+    xitr = range(lenX)
     Y = A[:,-1]
 
     # multivariate pade function of
-    a = np.ones((ncols -1 ) * M + 1)
-    b = np.ones((ncols - 1) * N )
-    ab = np.hstack(( a, b) )
-    def fn(coeffs , x , M, N) :
+    aExps = [tuple([0]*lenX) ] ; bExps = []
+    for n in range(1,1+ max(M,N)) :
+        if n <= M :
+            aExps.extend( genPowers(lenX, n) )
+        if n <= N :
+            bExps.extend(  genPowers(lenX, n) )
+
+    lena = len(aExps)
+    lenb = len(bExps)
+    a = np.ones(lena)
+    b = np.ones(lenb)
+
+    c = np.hstack(( a, b) )
+
+    def fn(coeffs , x, y) :
         # Pade function will have
         # x: 1-by-n array of variables
-        num = coeffs[0]
+        xitr = range(len(x))
+        num = 0.0
         den = 1.0
-        itr = 0
 
-        for m in range(ncols -1 ) :
+        for n in range(max(lena,lenb)):
+            if n < lena :
+                exps = aExps[n]
+                mon = [x[i] ** exps[i] for i in xitr ]
+                num += coeffs[n] * product(mon)
 
-            itr = 1 + m * M
-            for i in range(M) :
-                num += coeffs[itr] * x[m] ** (i+1)
-                itr +=1
+            if n < lenb:
+                exps = bExps[n]
+                mon = [x[i] ** exps[i] for i in xitr ]
+                den += coeffs[lena + n] * product(mon)
 
-            itr = (ncols -1 ) * M + 1 + m * N
-            # ens: constant term of denominator is 1
-            for j in range(N):
-                den += coeffs[itr] *x[m] ** (j+1)
-                itr += 1
-
-        if den == 0.0 :
-            den += 1e-15
-        return num / den
+        return num -den * y
 
     # residual fn.
-    def PHI(coeffs, X,Y , M, N) :
+    def F(coeffs) :
         # coeffs: Pade coefficients
         # X : matrix of all variables
         # Y : column vector of y-values
@@ -58,12 +117,10 @@ def Pade(A,M,N):
 
             x = X[i,:] # one row of X = one set of indep. vars
             y =  Y[i]
-            resid2 += (fn(coeffs, x, M, N ) - y) ** 2.
+            resid2 +=  fn(coeffs, x,y) ** 2.
 
+        #print resid2
         return resid2 / nrows
-
-    def F(x) :
-        return PHI(x, X, Y, M, N)
 
     # gradient computation
     def cdjac(x) :
@@ -79,13 +136,13 @@ def Pade(A,M,N):
         return df
 
 
-    # now find optimal values in ab through CG minimization
-    ab_min = scipy.optimize.minimize(PHI, ab,args=((X,Y, M , N)),method =
-            'Nelder-Mead', options={'maxfev':3e3,'disp':True,'xtol':1e-6,'ftol':1e-6/nrows})
-    #ab_min = scipy.optimize.minimize(F,ab, method='Newton-CG',jac=cdjac )
+    # now find optimal values in ab through minimization
+    ab_min = scipy.optimize.minimize(F, c, method = 'Nelder-Mead',
+            options={'maxiter':1e4,'maxfev':1e4,'disp':True,'xtol':1e-8})
+    #ab_min = scipy.optimize.minimize(F,c, method='Newton-CG',jac=cdjac )
 
 
-    return ab_min['x']
+    return ab_min['x'], aExps, bExps
 
 # Remark: I use Nelder-Mead here because
 # CG is 'extremely' slow for this - an option would be to modify PHI to
@@ -93,4 +150,27 @@ def Pade(A,M,N):
 # that means huge Jacobian? ) since it may then be more precise.
 #if anyone wants to test this let me know the results!
 # other option, of course, is C++...
+
+def Pade_eval(x, coeffs, aExps, bExps) :
+    # Pade function will have
+    # x: 1-by-n array of variables
+    xitr = range(len(x))
+    lena = len(aExps)
+    lenb = len(bExps)
+    num = 0.0
+    den = 1.0
+
+    for n in range(max(lena,lenb)):
+        if n < lena :
+            exps = aExps[n]
+            mon = [x[i] ** exps[i] for i in xitr ]
+            num += coeffs[n] * product(mon)
+
+        if n < lenb:
+            exps = bExps[n]
+            mon = [x[i] ** exps[i] for i in xitr ]
+            den += coeffs[lena + n] * product(mon)
+
+    return num/den
+
 
