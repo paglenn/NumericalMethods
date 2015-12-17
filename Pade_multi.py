@@ -138,7 +138,7 @@ def Pade_fit(A,M,N):
 
     # now find optimal values in ab through minimization
     ab_min = scipy.optimize.minimize(F, c, method = 'Nelder-Mead',
-            options={'maxiter':1e4,'maxfev':1e4,'disp':True,'xtol':1e-8})
+            options={'maxiter':5e4,'maxfev':=5e4,'disp':True,'xtol':1e-8})
     #ab_min = scipy.optimize.minimize(F,c, method='Newton-CG',jac=cdjac )
 
 

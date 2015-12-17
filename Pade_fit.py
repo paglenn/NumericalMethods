@@ -40,16 +40,19 @@ def genPowers(nvars, nmax) :
     npart = len(plist)
 
     plist_init = list(plist)
+    #print plist_init
     nterms = comb(nmax + nvars -1 , nmax )
 
     defects = [ nvars - len(l) for l in plist]
     for i in range(npart) :
-        plist[i] = plist[i] + defects[i] * [0]
-        perms = list( permutations(plist[i]) )
-        unique_perms = list( set(perms) )
-        klist += unique_perms
+        if defects[i] >= 0 :
+            plist[i] = plist[i] + defects[i] * [0]
+            perms = list( permutations(plist[i]) )
+            unique_perms = list( set(perms) )
+            klist += unique_perms
 
 
+    #rint klist
     return klist
 
 def product(myList) :
@@ -82,8 +85,8 @@ def Pade_fit(A,M,N):
 
     lena = len(aExps)
     lenb = len(bExps)
-    a = np.ones(lena)
-    b = np.ones(lenb)
+    a = np.zeros(lena)
+    b = np.zeros(lenb)
 
     c = np.hstack(( a, b) )
 
@@ -105,7 +108,7 @@ def Pade_fit(A,M,N):
                 mon = [x[i] ** exps[i] for i in xitr ]
                 den += coeffs[lena + n] * product(mon)
 
-        return num -den * y
+        return num - den * y
 
     # residual fn.
     def F(coeffs) :
@@ -122,7 +125,7 @@ def Pade_fit(A,M,N):
         #print resid2
         return resid2 / nrows
 
-    # gradient computation
+    # gradient computation via centered differencing
     def cdjac(x) :
 
         eps = 1e-10
@@ -138,7 +141,7 @@ def Pade_fit(A,M,N):
 
     # now find optimal values in ab through minimization
     ab_min = scipy.optimize.minimize(F, c, method = 'Nelder-Mead',
-            options={'maxiter':5e4,'maxfev':5e4,'disp':True,'xtol':1e-8})
+			options={'disp':True,'ftol':1e-5})
     #ab_min = scipy.optimize.minimize(F,c, method='Newton-CG',jac=cdjac )
 
 
